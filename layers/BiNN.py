@@ -1,39 +1,20 @@
-import numpy as np
 import torch
+torch.manual_seed(0)
+torch.cuda.manual_seed_all(0)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
 import torch.nn as nn
 import torch.nn.functional as F
-import math
+import numpy as np
+np.random.seed(0)
 
 class BiNN(nn.Module):
-    """
-        GNN Module layer
-    """
-    def __init__(self, rel, rel_fea, hid_units, out_ft, act='prelu', drop_prob=0.5, isBias=False):
+    def __init__(self, rel, ft_size, hid_units, act=nn.PReLU(), drop_prob=0.5, isBias=False):
         super().__init__()
-        v, u = rel.split("-")
-        self.fc_v = nn.Linear(rel_fea[v][rel].shape[1], hid_units)
-        self.fc_u = nn.Linear(rel_fea[u][rel].shape[1], hid_units)
-        self.fc_v2 = nn.Linear(hid_units+rel_fea[v]['original'].shape[1], out_ft)
-        self.fc_u2 = nn.Linear(hid_units+rel_fea[v]['original'].shape[1], out_ft)
-
-        if act == 'prelu':
-            self.act = nn.PReLU()
-        elif act == 'relu':
-            self.act = nn.ReLU()
-        elif act == 'leakyrelu':
-            self.act = nn.LeakyReLU()
-        elif act == 'relu6':
-            self.act = nn.ReLU6()
-        elif act == 'rrelu':
-            self.act = nn.RReLU()
-        elif act == 'selu':
-            self.act = nn.SELU()
-        elif act == 'celu':
-            self.act = nn.CELU()
-        elif act == 'sigmoid':
-            self.act = nn.Sigmoid()
-        elif act == 'identity':
-            self.act = nn.Identity()
+        v, u = rel.split('-')
+        in_ftv, in_ftu = ft_size[v], ft_size[u]
+        self.fc_v1 = nn.Linear(in_ftv, hid_units, bias=False)
+        self.fc_u1 = nn.Linear(in_ftu, hid_units, bias=False)
 
         if isBias:
             self.bias_1 = nn.Parameter(torch.FloatTensor(out_ft))
@@ -44,6 +25,7 @@ class BiNN(nn.Module):
         for m in self.modules():
             self.weights_init(m)
 
+        self.act = act
         self.drop_prob = drop_prob
         self.isBias = isBias
 
@@ -53,15 +35,17 @@ class BiNN(nn.Module):
             if m.bias is not None:
                 m.bias.data.fill_(0.0)
 
-    def forward(self, ):
-        seq = F.dropout(seq, self.drop_prob, training=self.training)
-        seq = self.fc_1(seq)
+    def forward(self, v_adj, u_adj, v_emb, u_emb, sparse=False):
+        v_ = F.dropout(v_emb, self.drop_prob, training=self.training)
+        u_ = F.dropout(u_emb, self.drop_prob, training=self.training)
+        v_ = self.fc_v1(v_)
+        u_ = self.fc_u1(u_)
         if sparse:
-            seq = torch.unsqueeze(torch.spmm(adj, torch.squeeze(seq, 0)), 0)
+            u = torch.spmm(u_adj, v_)
+            v = torch.spmm(v_adj, u_)
         else:
-            seq = torch.bmm(adj, seq)
-
-        if self.isBias:
-            seq += self.bias_1
-
-        return self.act(seq)
+            u = torch.mm(u_adj, v_)
+            v = torch.mm(v_adj, u_)
+        u = self.act(u)
+        v = self.act(v)
+        return self.act(v), self.act(u)
