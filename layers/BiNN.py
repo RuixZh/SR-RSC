@@ -35,9 +35,9 @@ class BiNN(nn.Module):
             if m.bias is not None:
                 m.bias.data.fill_(0.0)
 
-    def forward(self, v_adj, u_adj, v_emb, u_emb):
+    def forward(self, v_emb, u_emb):
         v_ = F.dropout(v_emb, self.drop_prob, training=self.training)
         u_ = F.dropout(u_emb, self.drop_prob, training=self.training)
-        v_ = self.fc_v1(v_)
-        u_ = self.fc_u1(u_)
+        v = self.fc_v1(v_)
+        u = self.fc_u1(u_)
         return self.act(v), self.act(u)
