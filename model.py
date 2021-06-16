@@ -29,7 +29,8 @@ class BiHIN(embedder):
 #                 st, tt = rel.split("-")
             model.train()
             optimizer.zero_grad()
-            embs, loss = model(self.edges, self.features, self.shuff_features, self.args.sparse)
+
+            embs, loss = model(self.graph, self.features)
             if loss < best:
                 best = loss
                 cnt_wait = 0
@@ -58,34 +59,39 @@ class modeler(nn.Module):
                                        args.drop_prob,
                                        args.isBias) for rel in args.bi_graphs])
         self.bnn2 = nn.ModuleList([BiNN(rel,
-                                        {t:fs+args.hid_units for t, fs in args.ft_size.items()},
+                                        {t:args.hid_units for t, fs in args.ft_size.items()},
+                                        args.out_ft,
+                                        nn.PReLU(),
+                                        args.drop_prob,
+                                        args.isBias) for rel in args.bi_graphs])
+        self.bnn3 = nn.ModuleList([BiNN(rel,
+                                        {t:args.out_ft+fs for t, fs in args.ft_size.items()},
                                         args.out_ft,
                                         nn.Identity(),
                                         args.drop_prob,
                                         args.isBias) for rel in args.bi_graphs])
-
         self.att = nn.ModuleDict({k:Attention(args.out_ft, v) for k,v in args.node_bigraphs.items()})
         self.disc = nn.ModuleList([Discriminator(args.out_ft, args.out_ft) for _ in args.bi_graphs])
 
-    def forward(self, edges, features, shuff_features, sparse, act=nn.Sigmoid(), isAtt=False):
+    def forward(self, graph, features, act=nn.Sigmoid(), isAtt=False):
         node_embs = defaultdict(list)
-        for i, rel in enumerate(self.args.bi_graphs):
+        for i, rel in enumerate(self.args.bi_graphs):  # acm p-a p-s
             v, u = rel.split('-')
-            ve, ue = self.bnn[i](edges[rel], edges[u+'-'+v], features[v], features[u], sparse)
-            ve = torch.cat((ve, features[v]), 1)
-            ue = torch.cat((ue, features[u]), 1)
-            ve2, ue2 = self.bnn2[i](edges[rel], edges[u+'-'+v], ve, ue, sparse)
-#             emb = torch.cat((ve2, ue2), 1)
-            sv = torch.mean(ve2, 0)
-            su = torch.mean(ue2, 0)
-            s = act(torch.cat((sv, su), -1))
+            vneighbor = torch.vstack([torch.mean(features[u][nid],0) for nid in graph[rel][v]])
+            uneighbor = torch.vstack([torch.mean(features[v][nid],0) for nid in graph[rel][u]])
+            ve1, ue1 = self.bnn[i](vneighbor, uneighbor)
 
-#             shuff_ve, shuff_ue = self.bnn[i](edges[rel], edges[u+'-'+v], shuff_features[v], shuff_features[u], sparse)
-#             shuff_ve = torch.cat((shuff_ve, shuff_features[v]), 1)
-#             shuff_ue = torch.cat((shuff_ue, shuff_features[u]), 1)
-#             shuff_ve2, shuff_ue2 = self.bnn2[i](edges[rel], edges[u+'-'+v], shuff_ve, shuff_ue, sparse)
+            ve2 = torch.vstack([torch.mean(ue1[nid],0) for nid in graph[rel][v]])
+            ue2 = torch.vstack([torch.mean(ve1[nid],0) for nid in graph[rel][u]])
+            ve2, ue2 = self.bnn2[i](ve2, ue2)
 
-#             shuff_emb = torch.cat((shuff_ve2, shuff_ue2), 1)
+            ve3, ue3 = torch.cat((ve2, features[v]), 1), torch.cat((ue2, features[u]), 1)
+            ve3, ue3 = self.bnn3[i](ve3, ue3)
+
+            sv = torch.vstack([torch.mean(torch.vstack([ue3[nid],ve3[cid].unsqueeze(0)]),0) for cid,nid in enumerate(graph[rel][v])])
+            su = torch.vstack([torch.mean(torch.vstack([ve3[nid],ue3[cid].unsqueeze(0)]),0) for cid,nid in enumerate(graph[rel][u])])
+
+
 
 #             logit = self.disc[i](s, emb, shuff_emb)
 #             vp_1 = torch.ones(features[v].shape[0])

@@ -5,7 +5,6 @@ from collections import defaultdict
 import pickle
 import torch
 import torch.nn as nn
-from torch_geometric.data import Data, Batch
 
 def preprocess_features(features, normalize=False):
     """Row-normalize feature matrix and convert to tuple representation"""
@@ -20,7 +19,7 @@ def preprocess_features(features, normalize=False):
     return torch.FloatTensor(features)
 
 class embedder:
-    def __init__(self, args):
+    def __init__(self, args, rewrite=False):
         file = "./dataset/"+args.dataset+".pkl"
         with open(file, "rb") as f:
             data = pickle.load(f)
@@ -46,15 +45,17 @@ class embedder:
         self.args = args
         print("Bi-graph:%s"%args.nb_graphs)
         print("node_type num_node ft_size")
-        for t,ft in self.features.items():
+        for t,ft in data["feature"].items():
             print("\n%s\t %s\t %s"%(t,ft.shape[0],ft.shape[1]))
         print("num_class:%s"%args.nb_classes)
 
         self.path = './subgraph/' + args.dataset
 
-        if os.path.isfile(self.path+'_graph') and os.stat(self.path+'_graph').st_size != 0:
+        if (rewrite == False) and os.path.isfile(self.path+'_graph') and os.stat(self.path+'_graph').st_size != 0:
             print ("Exists graph file")
             self.graph = torch.load(self.path+'_graph')
+            self.features = torch.load(self.path+'_features')
+
         else:
             print ("Extract graph")
             self.build(data["adj_list"], data["feature"])
@@ -66,20 +67,17 @@ class embedder:
             s, t = rel.split('-')
             nb_s = args.nb_nodes[s]
             nb_t = args.nb_nodes[t]
-            edge = {}
+            s_adj = []
             for i in range(nb_s):
                 nodes = adj_list[rel][i]
-                x = preprocess_features(features[t][nodes], normalize=False)
-                new_index = [[], []]
-                new_index[0] += len(nodes) * [i]
-                new_index[1] += nodes
-                edge[s+str(i)] = Data(x, torch.LongTensor(new_index))
+#                 x = preprocess_features(features[t][nodes], normalize=False)
+                s_adj.append(torch.LongTensor(nodes))
+            t_adj = []
             for i in range(nb_t):
                 nodes = adj_list[t+'-'+s][i]
                 x = preprocess_features(features[s][nodes], normalize=False)
-                new_index = [[], []]
-                new_index[0] += len(nodes) * [i]
-                new_index[1] += nodes
-                edge[t+str(i)] = Data(x, torch.LongTensor(new_index))
-            self.graph[rel] = edge
+                t_adj.append(torch.LongTensor(nodes))
+            self.graph[rel] = {s: s_adj, t: t_adj}
         torch.save(self.graph, self.path+'_graph')
+        self.features = {t:preprocess_features(f, normalize=False) for t, f in features.items()}
+        torch.save(self.features, self.path+'_features')

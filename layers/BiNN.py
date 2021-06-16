@@ -35,17 +35,9 @@ class BiNN(nn.Module):
             if m.bias is not None:
                 m.bias.data.fill_(0.0)
 
-    def forward(self, v_adj, u_adj, v_emb, u_emb, sparse=False):
+    def forward(self, v_adj, u_adj, v_emb, u_emb):
         v_ = F.dropout(v_emb, self.drop_prob, training=self.training)
         u_ = F.dropout(u_emb, self.drop_prob, training=self.training)
         v_ = self.fc_v1(v_)
         u_ = self.fc_u1(u_)
-        if sparse:
-            u = torch.spmm(u_adj, v_)
-            v = torch.spmm(v_adj, u_)
-        else:
-            u = torch.mm(u_adj, v_)
-            v = torch.mm(v_adj, u_)
-        u = self.act(u)
-        v = self.act(v)
         return self.act(v), self.act(u)
