@@ -9,12 +9,9 @@ import numpy as np
 np.random.seed(0)
 
 class BiNN(nn.Module):
-    def __init__(self, rel, ft_size, hid_units, act=nn.PReLU(), drop_prob=0.5, isBias=False):
+    def __init__(self, in_ft, out_ft, act=nn.PReLU(), drop_prob=0.5, isBias=False):
         super().__init__()
-        v, u = rel.split('-')
-        in_ftv, in_ftu = ft_size[v], ft_size[u]
-        self.fc_v1 = nn.Linear(in_ftv, hid_units, bias=False)
-        self.fc_u1 = nn.Linear(in_ftu, hid_units, bias=False)
+        self.fc_1 = nn.Linear(in_ft, out_ft, bias=False)
 
         if isBias:
             self.bias_1 = nn.Parameter(torch.FloatTensor(out_ft))
@@ -35,9 +32,7 @@ class BiNN(nn.Module):
             if m.bias is not None:
                 m.bias.data.fill_(0.0)
 
-    def forward(self, v_emb, u_emb):
-        v_ = F.dropout(v_emb, self.drop_prob, training=self.training)
-        u_ = F.dropout(u_emb, self.drop_prob, training=self.training)
-        v = self.fc_v1(v_)
-        u = self.fc_u1(u_)
-        return self.act(v), self.act(u)
+    def forward(self, emb):
+        e_ = F.dropout(emb, self.drop_prob, training=self.training
+        e = self.fc_1(e_)
+        return self.act(e)
