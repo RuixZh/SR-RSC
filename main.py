@@ -12,9 +12,10 @@ import argparse
 def parse_args():
     # input arguments
     parser = argparse.ArgumentParser(description='BiHIN')
-    parser.add_argument('--gpu_num', type=int, default=0)
+    parser.add_argument('--gpu_num', nargs='?', default='0')
     parser.add_argument('--embedder', nargs='?', default='BiHIN')
     parser.add_argument('--dataset', nargs='?', default='acm')
+    parser.add_argument('--hopK', type=int, default=2)
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--nb_epochs', type=int, default=10000)
 

@@ -33,6 +33,6 @@ class BiNN(nn.Module):
                 m.bias.data.fill_(0.0)
 
     def forward(self, emb):
-        e_ = F.dropout(emb, self.drop_prob, training=self.training
+        e_ = F.dropout(emb, self.drop_prob, training=self.training)
         e = self.fc_1(e_)
         return self.act(e)

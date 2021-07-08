@@ -13,32 +13,43 @@ class modeler(nn.Module):
     def __init__(self, args):
         super().__init__()
         self.args = args
-        self.bnn1 = nn.ModuleList()
-        self.bnn2 = nn.ModuleList()
-        self.bnn = nn.ModuleList()
+        self.bnn1 = nn.ModuleList([BiNN(,
+                                       args.out_ft,
+                                       nn.PReLU(),
+                                       args.drop_prob,
+                                       args.isBias)])
+        self.bnn2 = BiNN(args.out_ft + self.args.ft_size,
+                         args.out_ft,
+                         nn.Identity(),
+                         args.drop_prob,
+                         args.isBias)
+        for k in range(1, args.hopK):
+            self.bnn1.append(BiNN(,
+                            args.out_ft,
+                            nn.PReLU(),
+                            args.drop_prob,
+                            args.isBias))
 
-        for rel in self.args.bi_graphs:
-            v, u = rel.split('-')
-            if v == u:
-                self.bnn1.append(BiNN(args.ft_size[v], args.hid_units, nn.PReLU(), args.drop_prob, args.isBias))
-                self.bnn2.append(BiNN(args.hid_units, args.out_ft, nn.PReLU(), args.drop_prob, args.isBias))
-                self.bnn.append(BiNN(args.out_ft+args.ft_size[v], args.out_ft, nn.PReLU(), args.drop_prob, args.isBias))
 
-            else:
-                self.bnn1.append(BiNN(args.ft_size[v], args.hid_units, nn.PReLU(), args.drop_prob, args.isBias))
-                self.bnn1.append(BiNN(args.ft_size[u], args.hid_units, nn.PReLU(), args.drop_prob, args.isBias))
-                self.bnn2.append(BiNN(args.hid_units, args.out_ft, nn.PReLU(), args.drop_prob, args.isBias))
-                self.bnn2.append(BiNN(args.hid_units, args.out_ft, nn.PReLU(), args.drop_prob, args.isBias))
-                self.bnn.append(BiNN(args.out_ft+args.ft_size[v], args.out_ft, nn.PReLU(), args.drop_prob, args.isBias))
-                self.bnn.append(BiNN(args.out_ft+args.ft_size[u], args.out_ft, nn.PReLU(), args.drop_prob, args.isBias))
+    def forward(self, node_list, graph, features, k, act=nn.Sigmoid(), isConcat=False, isAtt=False):
+        fbatch = []
+        for n in node_list:
+            rel_neighbors = graph[n]
+            v = []
+            for neighbors in rel_neighbors:
+                v.append(torch.mean(features[neighbors],0))
+            fbatch.append(torch.vstack(v).unsqueeze(0))
+        v_in = torch.vstack(fbatch)  # (batch_size, rel_size, ft)
+        v_out = self.bnn1[k](v)  # (batch_size, rel_size, d)
 
-    def forward(self, t1, t2, subfeas, nt_cnt, hopK=None, act=nn.Sigmoid(), isAtt=False):
-        if hopK == 1:
-            e1 = self.bnn1[nt_cnt](subfeas)
-            return e1
-        elif hopK == 2:
-            e2 = self.bnn2[nt_cnt](subfeas)
-            return e2
+        if isAtt:
+            v_out = self.att[k](v_out)
         else:
-            e = self.bnn[nt_cnt](subfeas)
-            return e
+            v_out = torch.mean(v_out, 1)  # (batch_size, d)
+        if isConcat:
+            v = torch.hstack((v_out, features[node_list+1]))
+            v_out = self.bnn2(v)
+
+        return v_out
+
+    def loss(self,)

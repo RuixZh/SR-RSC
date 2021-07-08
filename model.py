@@ -21,61 +21,30 @@ class BiHIN(embedder):
         model = modeler(self.args).to(self.args.device)
         optimizer = torch.optim.Adam(model.parameters(), lr=self.args.lr, weight_decay=self.args.l2_coef)
         cnt_wait = 0; best = 1e9
-        self.graph = {k:{t:[i.to(self.args.device) for i in n] for t, n in v.items()} for k,v in self.graph.items()}
-        self.features = {t: f.to(self.args.device) for t, f in self.features.items()}
-        zeros = torch.zeros((1, self.args.hid_units)).to(self.args.device)
+        self.graph = [[i.to(self.args.device) for i in n] for n in self.graph]  # [0: nb_node-1] neighbor_idx [0: nb_node] with 0 padding
+        self.features = self.features.to(self.args.device)  # [0: nb_node] with 0 padding
+        # zeros = torch.zeros((1, self.args.hid_units)).to(self.args.device)
         for epoch in range(self.args.nb_epochs):
             model.train()
-            nt_cnt = {1:0,2:0,3:0}
-            node_embs = defaultdict()
-            for i, rel in enumerate(self.args.bi_graphs):
-                v, u = rel.split('-')
-                if v == u:
-                    dataloader = {rel: torch.utils.data.DataLoader(range(self.args.nb_nodes[v]),
-                                                              batch_size=self.args.batch_size,
-                                                              shuffle=True,
-                                                              drop_last=False)}
-                else:
-                    dataloader = {rel: torch.utils.data.DataLoader(range(self.args.nb_nodes[v]),
-                                                              batch_size=self.args.batch_size,
-                                                              shuffle=True,
-                                                              drop_last=False),
-                                  u+'-'+v: torch.utils.data.DataLoader(range(self.args.nb_nodes[u]),
-                                                             batch_size=self.args.batch_size,
-                                                             shuffle=True,
-                                                             drop_last=False)}
+            dataloader = torch.utils.data.DataLoader(range(self.args.nb_node),  # [0: nb_node-1]
+                                                      batch_size=self.args.batch_size,
+                                                      shuffle=True,
+                                                      drop_last=False)
+            features = self.features
+            isConcat = False
+            for k in range(self.args.hopK):
+                if k == self.args.hopK-1:
+                    isConcat = True
+                new_fea = torch.zeros((1+self.args.nb_node, self.args.out_ft)).to(self.args.device)
+                for batch in dataloader:
+                    vec_1 = model(batch, self.graph, features, k, isConcat=isConcat)
+                    new_fea[batch+1] = vec_1
+                features = new_fea
 
-                for r in dataloader:
-                    t1, t2 = r.split('-')
-                    e = torch.zeros(args.nb_nodes[t1],args.hid_units).to(self.args.device)
-                    for batch in dataloader[r]:
-                        fbatch = self.search(self.graph[rel][t1], self.features[t2], batch)
-                        embs = model(t1, t2, fbatch, nt_cnt[1], hopK=1)
-                        e[batch,:] = embs
-                    node_embs[t1] = torch.cat((zeros, e), 0)
-                    nt_cnt[1] += 1
-                for r in dataloader:
-                    t1, t2 = r.split('-')
-                    e = torch.zeros(args.nb_nodes[t1], args.out_ft).to(self.args.device)
-                    for batch in dataloader[r]:
-                        fbatch = self.search(self.graph[rel][t1], node_embs[t2], batch)
-                        embs = model(t1, t2, fbatch, nt_cnt[2], hopK=2)
-                        e[batch,:] = embs
-                    node_embs[t1] = torch.cat((e[t1], self.features[t1][1:]), -1)
-                    nt_cnt[2] += 1
-                for r in dataloader:
-                    t1, t2 = r.split('-')
-                    e = torch.zeros(args.nb_nodes[t1], args.out_ft).to(self.args.device)
-                    for batch in dataloader[r]:
-                        fbatch = node_embs[t1][batch]
-                        embs = model(t1, t2, fbatch, nt_cnt[3])
-                        e[batch,:] = embs
-                    node_embs[t1] = e
-                    nt_cnt[3] += 1
 
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
 
             if loss < best:
                 best = loss
@@ -90,11 +59,12 @@ class BiHIN(embedder):
             if cnt_wait == self.args.patience:
                 break
 
-    def search(self, graph, features, node_list):
-        # nbatch = []
-        fbatch = []
-        for n in node_list:
-            neighbors = graph[n]
-            # nbatch.append(neighbors)
-            fbatch.append(torch.mean(features[neighbors],0))
-        return torch.vstack(fbatch)
+    # def search(self, graph, features, node_list):
+    #     fbatch = []
+    #     for n in node_list:
+    #         rel_neighbors = graph[n]
+    #         v = []
+    #         for neighbors in rel_neighbors:
+    #             v.append(torch.mean(features[neighbors],0))
+    #         fbatch.append(torch.vstack(v).unsqueeze(0))
+    #     return torch.vstack(fbatch)  # (batch_size, rel_size, dim)
