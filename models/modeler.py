@@ -13,22 +13,25 @@ class modeler(nn.Module):
     def __init__(self, args):
         super().__init__()
         self.args = args
-        self.bnn1 = nn.ModuleList([BiNN(,
+        self.bnn1 = nn.ModuleList([GCN(args.nb_rel,
+                                       args.ft_size,
                                        args.out_ft,
                                        nn.PReLU(),
                                        args.drop_prob,
                                        args.isBias)])
-        self.bnn2 = BiNN(args.out_ft + self.args.ft_size,
+        self.att = nn.ModuleList([Attention(args.ft_size,args.out_ft) for _ in range(args.hopK)])
+        self.bnn2 = GCN2(args.out_ft + self.args.ft_size,
                          args.out_ft,
                          nn.Identity(),
                          args.drop_prob,
                          args.isBias)
         for k in range(1, args.hopK):
-            self.bnn1.append(BiNN(,
-                            args.out_ft,
-                            nn.PReLU(),
-                            args.drop_prob,
-                            args.isBias))
+            self.bnn1.append(GCN(args.nb_rel,
+                                 args.out_ft,
+                                 args.out_ft,
+                                 nn.PReLU(),
+                                 args.drop_prob,
+                                 args.isBias))
 
 
     def forward(self, node_list, graph, features, k, act=nn.Sigmoid(), isConcat=False, isAtt=False):
@@ -38,14 +41,15 @@ class modeler(nn.Module):
             v = []
             for neighbors in rel_neighbors:
                 v.append(torch.mean(features[neighbors],0))
-            fbatch.append(torch.vstack(v).unsqueeze(0))
-        v_in = torch.vstack(fbatch)  # (batch_size, rel_size, ft)
+            fbatch.append(torch.vstack(v).unsqueeze(1))
+        v_in = torch.cat(fbatch, 1)  # (rel_size, batch_size, ft)
         v_out = self.bnn1[k](v)  # (batch_size, rel_size, d)
 
         if isAtt:
             v_out = self.att[k](v_out)
         else:
             v_out = torch.mean(v_out, 1)  # (batch_size, d)
+
         if isConcat:
             v = torch.hstack((v_out, features[node_list+1]))
             v_out = self.bnn2(v)
