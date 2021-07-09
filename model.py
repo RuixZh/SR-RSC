@@ -30,29 +30,29 @@ class BiHIN(embedder):
                                                       batch_size=self.args.batch_size,
                                                       shuffle=True,
                                                       drop_last=False)
-            features = self.features
+            embs = self.features
             isConcat = False
             for k in range(self.args.hopK):
                 if k == self.args.hopK-1:
                     isConcat = True
                 new_fea = torch.zeros((1+self.args.nb_node, self.args.out_ft)).to(self.args.device)
                 for batch in dataloader:
-                    vec_1 = model(batch, self.graph, features, k, isConcat=isConcat)
+                    vec_1 = model(batch, self.graph, embs, k, isConcat=isConcat)
                     new_fea[batch+1] = vec_1
-                features = new_fea
-
+                embs = new_fea
+            loss = model.loss(embs, graph)
 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-
-            if loss < best:
-                best = loss
+            l = loss.item()
+            if l < best:
+                best = l
                 cnt_wait = 0
-                print("Epoch {},loss {:.2}".format(epoch, loss))
+                print("Epoch {},loss {:.2}".format(epoch, l))
                 torch.save(model.state_dict(), 'saved_model/best_{}_{}.pkl'.format(self.args.dataset, self.args.embedder))
-                self.node_embs = {k:torch.squeeze(v).detach().cpu().numpy() for k,v in embs.items()}
-                evaluation_metrics(self.node_embs[self.args.task_node], self.args.labels)
+                idx, labels = self.args.labels[:,0], self.args.labels[:,1]
+                evaluation_metrics(embs[idx], labels)
             else:
                 cnt_wait += 1
 

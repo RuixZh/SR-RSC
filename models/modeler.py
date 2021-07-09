@@ -32,7 +32,7 @@ class modeler(nn.Module):
                                  nn.PReLU(),
                                  args.drop_prob,
                                  args.isBias))
-
+        self.marginloss = nn.MarginRankingLoss(0.5)
 
     def forward(self, node_list, graph, features, k, act=nn.Sigmoid(), isConcat=False, isAtt=False):
         fbatch = []
@@ -56,4 +56,23 @@ class modeler(nn.Module):
 
         return v_out
 
-    def loss(self,)
+    def loss(self, embs, graph):
+        sub_h = []
+        for i, n in enumerate(graph):
+            vn = torch.hstack(n+[torch.LongTensor([1+i]).to(self.args.device)])
+            v_avg = torch.mean(embs[vn[vn>0]],0)
+            sub_h.append(v_avg)
+        h = torch.vstach(sub_h)
+        shuf_idx = torch.randperm(self.args.nb_node)
+        h2 = h[shuf_idx]
+        embs = embs[1:]
+        embs2 = embs[shuf_idx]
+        logits_pos = torch.sigmoid(torch.sum(embs * h, dim=-1))
+        logits_neg = torch.sigmoid(torch.sum(embs * h2, dim=-1))
+        logits_pos2 = torch.sigmoid(torch.sum(embs2 * h2, dim=-1))
+        logits_neg2 = torch.sigmoid(torch.sum(embs2 * h, dim=-1))
+        totalLoss = 0.0
+        ones = torch.ones(logits_pos.size(0)).to(self.args.device)
+        totalLoss += self.marginloss(logits_pos, logits_neg2, ones)
+        totalLoss += self.marginloss(logits_pos2, logits_neg, ones)
+        return totalLoss
