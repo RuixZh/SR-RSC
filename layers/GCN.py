@@ -31,4 +31,29 @@ class GCN(nn.Module):
         if self.isBias:
             e += self.bias.unsqueeze(1)
         e_out = self.act(e)
-        return torch.transpose(e_out, 0, 1)
+        return e_out
+
+class GNN(nn.Module):
+    def __init__(self, in_ft, out_ft, act=nn.PReLU(), drop_prob=0.5, isBias=False):
+        super().__init__()
+        self.weight = nn.Parameter(torch.empty(in_ft, out_ft))
+        nn.init.xavier_uniform_(self.weight, gain=1.414)
+
+        if isBias:
+            self.bias = nn.Parameter(torch.empty(out_ft))
+            self.bias.data.fill_(0.0)
+        else:
+            self.register_parameter('bias', None)
+
+        self.act = act
+        self.drop_prob = drop_prob
+        self.isBias = isBias
+
+    def forward(self, emb):
+        # emb (rel_size, batch_size, ft) weight (rel_size, ft, d)
+        e_ = F.dropout(emb, self.drop_prob, training=self.training)
+        e = torch.mm(e_, self.weight)  #  (rel_size, batch_size, d)
+        if self.isBias:
+            e += self.bias.unsqueeze(1)
+        e_out = self.act(e)
+        return e_out

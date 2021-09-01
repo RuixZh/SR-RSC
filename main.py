@@ -19,7 +19,7 @@ def parse_args():
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--nb_epochs', type=int, default=10000)
 
-    parser.add_argument('--nheads', type=int, default=1)
+    parser.add_argument('--n_samples', type=int, default=10)
     parser.add_argument('--hid_units', type=int, default=128)
     parser.add_argument('--out_ft', type=int, default=64)
     parser.add_argument('--lr', type = float, default = 0.0005)
