@@ -23,7 +23,7 @@ def parse_args():
     parser.add_argument('--patience', type=int, default=50)
 
 #     parser.add_argument('--att_hid_units', type=int, default=64)
-    parser.add_argument('--hid_units', type=int, default=256)# 128 best for dblp and yelp
+    parser.add_argument('--hid_units', type=int, default=256)# 128 best for dblp and yelp, larger datasets
     parser.add_argument('--hid_units2', type=int, default=128)
     parser.add_argument('--out_ft', type=int, default=64)
    
