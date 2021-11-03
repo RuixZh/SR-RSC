@@ -37,7 +37,7 @@ def parse_args():
     parser.add_argument('--isBias', action='store_true', default=False)
     parser.add_argument('--isAtt', action='store_true', default=False)
     parser.add_argument('--isLP', action='store_true', default=False)# link prediction
-    parser.add_argument('--isSemi', action='store_true', default=False)# link prediction
+    parser.add_argument('--isSemi', action='store_true', default=False)# semi-supervised learning
 
     return parser.parse_known_args()
 
