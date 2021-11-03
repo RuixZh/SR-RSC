@@ -1,1 +1,1 @@
-# HIN-embeddings
+# SR-RSC
