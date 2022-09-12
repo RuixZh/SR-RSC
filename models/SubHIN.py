@@ -159,10 +159,7 @@ class modeler(nn.Module):
             shuf_index = torch.randperm(nb).to(self.args.device)
 
             vec = embs2[self.args.node_cnt[n]]
-            if self.args.dataset in ['sdg']:
-                fvec = vec[shuf_index]+torch.normal(0,1.0,(len(self.args.node_cnt[n]), self.args.out_ft)).to(self.args.device)
-            else:
-                fvec = vec[shuf_index]
+            fvec = vec[shuf_index]
             a = nn.Softmax()(features[self.args.node_cnt[n]])
 
             logits_pos = self.disc2[n](a,vec)
@@ -182,11 +179,7 @@ class modeler(nn.Module):
                 logits_pos = (vec*mean_neighbor).sum(-1).view(-1)
                 logits_neg = (fvec*mean_neighbor).sum(-1).view(-1)
                 
-                if self.args.dataset in ['sdg']:
-                    logits = torch.hstack((logits_pos,logits_neg))
-                    totalLoss += coef*self.b_xent(logits, lbl)
-                else:
-                    totalLoss += coef*self.marginloss(torch.sigmoid(logits_pos), torch.sigmoid(logits_neg), ones)
+                totalLoss += coef*self.marginloss(torch.sigmoid(logits_pos), torch.sigmoid(logits_neg), ones)
 
                 # 2-hop proximity
                 logits = []
@@ -200,11 +193,7 @@ class modeler(nn.Module):
 
                     logits_pos = (vec*nmn).sum(-1).view(-1)
                     logits_neg = (fvec*nmn).sum(-1).view(-1)
-                    if self.args.dataset in ['sdg']:
-                        logits = torch.hstack((logits_pos,logits_neg))
-                        totalLoss += coef*self.b_xent(logits, lbl)
-                    else:
-                        totalLoss += (1-coef)*self.marginloss(torch.sigmoid(logits_pos), torch.sigmoid(logits_neg), ones)
+                    totalLoss += (1-coef)*self.marginloss(torch.sigmoid(logits_pos), torch.sigmoid(logits_neg), ones)
 
         if self.args.isSemi:
             
